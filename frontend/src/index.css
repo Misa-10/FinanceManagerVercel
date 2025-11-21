@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+:root {
+  --btn-gradient-from: #5e72e4;
+  --btn-gradient-to: #825ee4;
+  --btn-gradient-from-hover: #4b5bcf;
+  --btn-gradient-to-hover: #6b4bcf;
+  --secondary-dark: #22c55e;
+  --accent-dark: #f59e0b;
+  --danger-dark: #ef4444;
+  --info-dark: #60a5fa;
+  --success-dark: #22c55e;
+
+  --background-dark: #0b1220; /* fond */
+  --card-bg-dark: #0f172a; /* cartes / panneaux */
+  --sidebar-bg-dark: #0d1426; /* sidebar */
+  --text-primary-dark: #e5e7eb; /* texte */
+}
+#root > div {
+  padding-top: 0; /* ou pt-6 pour un petit espace */
+}
+
+.btn-gradient {
+  @apply text-white border-none rounded-xl; /* Tailwind utilities */
+  background-image: linear-gradient(
+    to right,
+    var(--btn-gradient-from),
+    var(--btn-gradient-to)
+  );
+}
+
+.btn-gradient:hover {
+  background-image: linear-gradient(
+    to right,
+    var(--btn-gradient-from-hover),
+    var(--btn-gradient-to-hover)
+  );
+}
