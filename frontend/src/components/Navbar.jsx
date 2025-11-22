@@ -11,10 +11,12 @@ export default function Navbar({ accounts, loadAccounts }) {
   const [selectedTypes, setSelectedTypes] = useState([]);
   const [accountTypes, setAccountTypes] = useState([]);
 
+  const API_URL = import.meta.env.VITE_API_URL;
+
   async function handleCreateAccount() {
     if (!accountName || selectedTypes.length === 0) return;
     try {
-      await axios.post("http://localhost:8000/api/accounts", {
+      await axios.post(`${API_URL}/accounts`, {
         name: accountName,
         account_type_ids: selectedTypes,
       });
@@ -29,7 +31,7 @@ export default function Navbar({ accounts, loadAccounts }) {
 
   async function openModal() {
     try {
-      const res = await axios.get("http://localhost:8000/api/accounts/types");
+      const res = await axios.get(`${API_URL}/accounts/types`);
       setAccountTypes(res.data || []);
     } catch (err) {
       console.error("Erreur chargement types:", err);
