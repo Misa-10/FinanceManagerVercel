@@ -40,12 +40,14 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [showImportInfo, setShowImportInfo] = useState(false);
 
+  const API_URL = import.meta.env.VITE_API_URL;
+
   useEffect(() => {
     async function load() {
       try {
         const [accountsRes, historyRes] = await Promise.all([
-          axios.get("http://localhost:8000/api/accounts/full"),
-          axios.get("http://localhost:8000/api/portfolio/history"),
+          axios.get(`${API_URL}/accounts/full`),
+          axios.get(`${API_URL}/portfolio/history`),
         ]);
 
         const accountsData = accountsRes.data || [];
@@ -238,6 +240,8 @@ export default function Home() {
     const file = e.target.files[0];
     if (!file) return;
 
+    const API_URL = import.meta.env.VITE_API_URL;
+
     Papa.parse(file, {
       header: false,
       skipEmptyLines: true,
@@ -252,14 +256,14 @@ export default function Home() {
 
           const csvData = Papa.unparse(cleanData);
 
-          await axios.post("http://localhost:8000/api/portfolio/import", {
+          await axios.post(`${API_URL}/portfolio/import`, {
             csv: csvData,
           });
 
           alert("Import CSV réussi !");
 
           const historyRes = await axios.get(
-            "http://localhost:8000/api/portfolio/history"
+            `${API_URL}/portfolio/history`
           );
           setHistory(historyRes.data || []);
         } catch (err) {
