@@ -105,7 +105,7 @@ export default function OrdersPage() {
     setSymbol(order.symbol);
     setType(order.type);
     setQuantity(order.quantity);
-    setPrice(order.price);
+    setPrice(order.currency === "USD" ? order.price_usd : order.price);
     setSelectedCurrency(order.currency || "EUR");
     setOrderDate(new Date(order.date).toISOString().slice(0, 16));
     setEditingOrderId(order.id);
@@ -202,14 +202,15 @@ export default function OrdersPage() {
   };
 
   const formatPrice = (num, orderCurrency) => {
+    if (num == null || isNaN(num)) return "-";
+
     const symbols = { EUR: "€", USD: "$" };
-    return `${num.toLocaleString("fr-FR", {
+
+    return `${Number(num).toLocaleString("fr-FR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    })} ${symbols[orderCurrency] || "€"}`;
+    })} ${symbols[orderCurrency] || ""}`;
   };
-
-  const totalInEUR = orders.reduce((sum, order) => sum + order.totalEUR, 0);
 
   return (
     <div className="min-h-screen bg-(--background-dark) text-(--text-primary-dark) pl-0 md:pl-64 p-6 space-y-8">
@@ -271,7 +272,11 @@ export default function OrdersPage() {
 
       {/* Formulaire */}
       <div className="max-w-md mx-auto">
-        <div className="bg-(--card-bg-dark)/70 backdrop-blur rounded-2xl border border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.25)] p-6 space-y-4">
+        <div
+          className="bg-(--card-bg-dark)/70 backdrop-blur rounded-2xl border border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.25)] p-6 space-y-4 
+                w-full max-w-md mx-auto stable"
+        >
+          {" "}
           <form onSubmit={handleAddOrUpdateOrder} className="space-y-4">
             {/* Sélection compte */}
             <div className="flex flex-col gap-1">
@@ -384,11 +389,6 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Total global */}
-      <div className="max-w-4xl mx-auto mt-4 text-white/80 font-semibold">
-        Total portefeuille : {formatPrice(totalInEUR, "EUR")}
-      </div>
-
       {/* Liste des ordres */}
       <div className="max-w-6xl mx-auto mt-4">
         {orders.length === 0 ? (
@@ -398,16 +398,20 @@ export default function OrdersPage() {
         ) : (
           <div className="space-y-3">
             {/* En-têtes (affichage desktop uniquement) */}
-            <div className="hidden md:flex items-center bg-(--card-bg-dark)/80 border border-white/10 rounded-lg p-3 font-semibold text-white/80 text-sm">
-              <span className="w-20">Symbole</span>
-              <span className="w-20">Qté</span>
-              <span className="w-24">Prix (USD)</span>
-              <span className="w-24">Prix (€)</span>
-              <span className="w-24">Total (€)</span>
-              <span className="w-32">Date</span>
-              <span className="w-40">Compte</span>
-              <span className="w-16">Type</span>
-              <span className="w-28 text-center">Actions</span>
+            <div
+              className="hidden md:grid grid-cols-[1fr_1fr_1.2fr_1.2fr_1.2fr_1.2fr_2fr_0.8fr_2fr] 
+                items-center bg-(--card-bg-dark)/80 border border-white/10 
+                rounded-lg p-3 font-semibold text-white/80 text-sm gap-4"
+            >
+              <span>Symbole</span>
+              <span>Qté</span>
+              <span>Prix (USD)</span>
+              <span>Prix (€)</span>
+              <span>Total (€)</span>
+              <span>Date</span>
+              <span>Compte</span>
+              <span>Type</span>
+              <span className="text-center col-span-1">Actions</span>
             </div>
 
             {orders
@@ -418,52 +422,66 @@ export default function OrdersPage() {
                   className="bg-(--card-bg-dark)/70 border border-white/10 rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.25)]"
                 >
                   {/* Version desktop */}
-                  <div className="hidden md:flex items-center">
-                    <span className="w-20 font-semibold text-white">
+                  <div
+                    key={order.id}
+                    className="hidden md:grid grid-cols-[1fr_1fr_1.2fr_1.2fr_1.2fr_1.2fr_2fr_0.8fr_2fr]
+             items-center bg-(--card-bg-dark)/70 border border-white/10 
+             rounded-xl p-4 shadow-[0_4px_20px_rgba(0,0,0,0.25)] gap-4"
+                  >
+                    <span className="truncate font-semibold text-white">
                       {order.symbol}
                     </span>
 
-                    <span className="w-20 text-white/70">{order.quantity}</span>
+                    <span className="truncate text-white/70">
+                      {Number(order.quantity).toLocaleString("fr-FR", {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 3,
+                      })}
+                    </span>
 
-                    <span className="w-24 text-white/70">
-                      {order.currency === "USD"
-                        ? formatPrice(order.price, "USD")
+                    <span className="truncate text-white/70">
+                      {order.currency === "USD" && order.price_usd != null
+                        ? formatPrice(order.price_usd, "USD")
                         : "-"}
                     </span>
 
-                    <span className="w-24 text-white/70">
-                      {formatPrice(order.priceEUR, "EUR")}
+                    <span className="truncate text-white/70">
+                      {formatPrice(order.price, "EUR")}
                     </span>
 
-                    <span className="w-24 text-white/70">
-                      {formatPrice(order.totalEUR, "EUR")}
+                    <span className="truncate text-white/70">
+                      {formatPrice(
+                        Number(order.price) * Number(order.quantity),
+                        "EUR"
+                      )}
                     </span>
 
-                    <span className="w-32 text-xs text-white/50">
+                    <span className="text-xs text-white/50 truncate">
                       {new Date(order.date).toLocaleDateString("fr-FR")}
                     </span>
 
-                    <span className="w-40 text-xs text-white/50 truncate">
+                    <span className="text-xs text-white/50 truncate">
                       {order.account_name} - {order.account_type}
                     </span>
 
                     <span
-                      className={`w-16 text-center text-xs font-semibold px-1.5 py-0.5 rounded-full ${
-                        order.type === "buy"
-                          ? "bg-green-600 text-white"
-                          : "bg-red-600 text-white"
-                      }`}
+                      className={`text-center text-xs font-semibold px-1.5 py-0.5 rounded-full w-fit mx-auto 
+                ${
+                  order.type === "buy" ? "bg-green-600" : "bg-red-600"
+                } text-white`}
                     >
                       {order.type === "buy" ? "A" : "V"}
                     </span>
 
-                    <div className="w-28 flex gap-2 justify-center">
+                    {/* Actions */}
+                    <div className="flex gap-2 justify-end">
                       <button
                         className="btn btn-sm rounded-xl bg-[#5e72e4] text-white hover:bg-[#4b5bcf]"
                         onClick={() => handleEditOrder(order)}
                       >
                         Modifier
                       </button>
+
                       <button
                         className="btn btn-sm rounded-xl bg-red-600 text-white hover:bg-red-700"
                         onClick={() => handleDeleteOrder(order.id)}

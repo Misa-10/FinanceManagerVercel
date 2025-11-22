@@ -1,140 +1,61 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-export default function AccountPositions({ accountId, accountTypes }) {
-  const [positionsByType, setPositionsByType] = useState({});
-  const [typeTotals, setTypeTotals] = useState({});
+export default function AccountPositions({ accountId }) {
+  const [accountData, setAccountData] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  const [cashValues, setCashValues] = useState({});
   const [cashSaving, setCashSaving] = useState({});
-
   const API_URL = import.meta.env.VITE_API_URL;
 
   useEffect(() => {
-    async function fetchPositions() {
+    async function fetchAccount() {
       setLoading(true);
       try {
         const res = await axios.get(`${API_URL}/accounts/full`);
-        const accounts = res.data || [];
-        const account = accounts.find((a) => a.id === Number(accountId));
-
-        if (!account) {
-          setPositionsByType({});
-          setTypeTotals({});
-          setCashValues({});
-          setLoading(false);
-          return;
-        }
-
-        const positionsResult = {};
-        const totalsResult = {};
-        const cashResult = {};
-
-        account.types.forEach((type) => {
-          // Positions
-          const positions = (type.positions || []).map((p) => {
-            const diffValue = p.currentValue - p.totalCost;
-            const diffPercent =
-              p.totalCost > 0 ? (diffValue / p.totalCost) * 100 : 0;
-            return { ...p, diffValue, diffPercent };
-          });
-
-          positionsResult[type.id] = positions;
-          cashResult[type.id] = type.cash ?? 0;
-
-          // Calculs totaux
-          const invested = positions.reduce((sum, p) => sum + p.totalCost, 0);
-          const positionsValue = positions.reduce(
-            (sum, p) => sum + p.currentValue,
-            0
-          );
-
-          const totalValue = type.cash + positionsValue;
-          const diffValue = totalValue - (invested + type.cash);
-          const diffPercent =
-            invested + type.cash > 0
-              ? (diffValue / (invested + type.cash)) * 100
-              : 0;
-
-          totalsResult[type.id] = {
-            invested,
-            positionsValue,
-            totalValue,
-            diffValue,
-            diffPercent,
-            cash: type.cash ?? 0,
-          };
-        });
-
-        setCashValues(cashResult);
-        setPositionsByType(positionsResult);
-        setTypeTotals(totalsResult);
+        const account = res.data.find((a) => a.id === Number(accountId));
+        setAccountData(account || null);
+        console.log(account);
       } catch (err) {
-        console.error("Erreur positions:", err);
+        console.error(err);
       }
-
       setLoading(false);
     }
-
-    fetchPositions();
-  }, [accountId, accountTypes]);
+    fetchAccount();
+  }, [accountId]);
 
   const updateCash = async (typeId, newCash) => {
     setCashSaving((s) => ({ ...s, [typeId]: true }));
-
     try {
       await axios.put(`${API_URL}/accounts/cash`, {
-        account_id: Number(accountId),
-        type_id: Number(typeId),
-        cash: Number(newCash || 0),
+        account_id: accountId,
+        type_id: typeId,
+        cash: Number(newCash),
       });
-
-      setTypeTotals((prev) => {
-        const t = prev[typeId];
-        const positionsValue = t.positionsValue;
-
-        const totalValue = positionsValue + Number(newCash);
-        const invested = t.invested;
-
-        const diffValue = totalValue - (invested + Number(newCash));
-        const diffPercent =
-          invested + Number(newCash) > 0
-            ? (diffValue / (invested + Number(newCash))) * 100
-            : 0;
-
-        return {
-          ...prev,
-          [typeId]: {
-            ...t,
-            cash: Number(newCash),
-            totalValue,
-            diffValue,
-            diffPercent,
-          },
-        };
+      // Mettre à jour localement
+      setAccountData((prev) => {
+        const types = prev.types.map((t) =>
+          t.id === typeId ? { ...t, cash: Number(newCash) } : t
+        );
+        return { ...prev, types };
       });
     } catch (err) {
-      console.error("Erreur mise à jour liquidités:", err);
+      console.error(err);
     }
-
     setCashSaving((s) => ({ ...s, [typeId]: false }));
   };
 
-  const formatNumber = (n) => {
-    return Number(n).toLocaleString("fr-FR", {
+  const formatNumber = (n) =>
+    Number(n).toLocaleString("fr-FR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-  };
 
-  if (loading) {
-    return <p className="text-gray-400 text-sm">Chargement des positions...</p>;
-  }
+  if (loading) return <p>Chargement des positions...</p>;
+  if (!accountData) return <p>Compte introuvable.</p>;
 
   return (
     <div className="space-y-6 mt-6 max-w-7xl mx-auto">
-      {accountTypes.map((type) => (
+      {accountData.types.map((type) => (
         <div
           key={type.id}
           className="rounded-2xl border border-white/10 p-6 bg-(--card-bg-dark) shadow-lg"
@@ -144,65 +65,52 @@ export default function AccountPositions({ accountId, accountTypes }) {
             <h2 className="col-span-3 text-xl font-semibold text-white">
               {type.name}
             </h2>
-
-            {/* Investi */}
             <div>
               <p className="text-white text-sm">Investi</p>
               <p className="text-white font-semibold">
-                {formatNumber(typeTotals[type.id]?.invested || 0)} €
+                {formatNumber(type.totalInvestedEUR)} €
               </p>
             </div>
-
-            {/* Diff */}
             <div>
               <p className="text-white text-sm">+/- valeur</p>
               <p
                 className={
-                  typeTotals[type.id]?.diffValue >= 0
+                  type.diffValueEUR >= 0
                     ? "text-green-400 font-semibold"
                     : "text-red-400 font-semibold"
                 }
               >
-                {formatNumber(typeTotals[type.id]?.diffValue || 0)} €
+                {formatNumber(type.diffValueEUR)} €
               </p>
               <p
                 className={
-                  typeTotals[type.id]?.diffValue >= 0
+                  type.diffValueEUR >= 0
                     ? "text-green-400 font-semibold text-xs"
                     : "text-red-400 font-semibold text-xs"
                 }
               >
-                {formatNumber(typeTotals[type.id]?.diffPercent || 0)} %
+                {formatNumber(type.diffPercent)} %
               </p>
             </div>
-
-            {/* Valeur totale */}
             <div>
-              <p className="text-white text-sm">Valeur</p>
+              <p className="text-white text-sm">Valeur totale</p>
               <p className="text-white font-semibold">
-                {formatNumber(typeTotals[type.id]?.totalValue || 0)} €
+                {formatNumber(type.totalValueEUR)} €
               </p>
             </div>
           </div>
 
-          {/* LIQUIDITÉS */}
+          {/* Liquidités */}
           <div className="mb-6">
             <p className="text-white text-sm mb-1">Liquidités</p>
             <div className="flex items-center gap-3">
               <input
                 type="number"
                 step="0.01"
-                value={cashValues[type.id] ?? ""} // ✅ laisse l'input vide si vide
-                onChange={(e) =>
-                  setCashValues((prev) => ({
-                    ...prev,
-                    [type.id]: e.target.value === "" ? "" : e.target.value, // ✅ autorise le vide
-                  }))
-                }
-                onBlur={(e) => updateCash(type.id, e.target.value)}
+                value={type.cash ?? ""}
+                onChange={(e) => updateCash(type.id, e.target.value)}
                 className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white w-40 focus:ring-2 focus:ring-blue-400"
               />
-
               {cashSaving[type.id] ? (
                 <span className="text-blue-400 text-sm">Sauvegarde…</span>
               ) : (
@@ -211,15 +119,12 @@ export default function AccountPositions({ accountId, accountTypes }) {
             </div>
           </div>
 
-          {/* POSITIONS */}
-          {!positionsByType[type.id] ||
-          positionsByType[type.id].length === 0 ? (
-            <p className="text-gray-500 text-sm">
-              Aucune position pour ce type.
-            </p>
+          {/* Positions */}
+          {!type.positions || type.positions.length === 0 ? (
+            <p className="text-gray-500 text-sm">Aucune position.</p>
           ) : (
             <div className="space-y-3">
-              {positionsByType[type.id].map((p) => (
+              {type.positions.map((p) => (
                 <div
                   key={p.symbol}
                   className="p-4 rounded-xl bg-[#131722] border border-gray-700"
@@ -229,46 +134,127 @@ export default function AccountPositions({ accountId, accountTypes }) {
                   </p>
                   <p className="text-sm text-white/50 mb-2">{p.symbol}</p>
 
-                  <div className="grid grid-cols-3 md:grid-cols-7 gap-2 text-sm text-gray-300 mt-2">
-                    <div>
-                      <p className="text-white">Quantité</p>
-                      <p>{p.quantity}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-white">PRU</p>
-                      <p>{formatNumber(p.avgPrice)} €</p>
-                    </div>
-
-                    <div>
-                      <p className="text-white">Actuel</p>
-                      <p>{formatNumber(p.currentPrice)} €</p>
-                    </div>
-
-                    <div>
-                      <p className="text-white">Investi</p>
-                      <p>{formatNumber(p.totalCost)} €</p>
-                    </div>
-
-                    <div>
-                      <p className="text-white">+/- valeur</p>
-                      <div
-                        className={
-                          p.diffValue >= 0 ? "text-green-400" : "text-red-400"
-                        }
-                      >
-                        <p className="font-semibold">
-                          {formatNumber(p.diffValue)} €
-                        </p>
-                        <p className="text-xs opacity-80">
-                          {formatNumber(p.diffPercent)} %
-                        </p>
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-x-2 gap-y-2 text-sm text-gray-300 mt-2">
+                    {/* Quantité */}
+                    <div className="col-span-1 flex flex-col gap-1">
+                      <div>
+                        <p className="text-white">Quantité</p>
+                        <p>{p.quantity}</p>
                       </div>
                     </div>
 
-                    <div>
-                      <p className="text-white">Valeur</p>
-                      <p>{formatNumber(p.currentValue)} €</p>
+                    {/* PRU */}
+                    <div className="col-span-1 flex flex-col gap-1">
+                      <div>
+                        <p className="text-white">PRU (€)</p>
+                        <p>{formatNumber(p.avgPriceEUR)}</p>
+                      </div>
+                      {p.currency === "USD" && (
+                        <div>
+                          <p className="text-white">PRU ($)</p>
+                          <p>{formatNumber(p.avgPriceUSD)}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actuel */}
+                    <div className="col-span-1 flex flex-col gap-1">
+                      <div>
+                        <p className="text-white">Actuel (€)</p>
+                        <p>{formatNumber(p.currentPriceEUR)}</p>
+                      </div>
+                      {p.currency === "USD" && (
+                        <div>
+                          <p className="text-white">Actuel ($)</p>
+                          <p>{formatNumber(p.currentPriceUSD)}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Investi */}
+                    <div className="col-span-1 flex flex-col gap-1">
+                      <div>
+                        <p className="text-white">Investi (€)</p>
+                        <p>{formatNumber(p.totalCostEUR)}</p>
+                      </div>
+                      {p.currency === "USD" && (
+                        <div>
+                          <p className="text-white">Investi ($)</p>
+                          <p>{formatNumber(p.totalCostUSD)}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* +/- */}
+                    <div className="col-span-1 flex flex-col gap-1">
+                      <div>
+                        <p className="text-white">+/- (€)</p>
+                        <p
+                          className={
+                            p.diffValueEUR >= 0
+                              ? "text-green-400"
+                              : "text-red-400"
+                          }
+                        >
+                          {formatNumber(p.diffValueEUR)}
+                        </p>
+                        <p
+                          className={
+                            p.diffValueEUR >= 0
+                              ? "text-green-400 font-semibold text-xs"
+                              : "text-red-400 font-semibold text-xs"
+                          }
+                        >
+                          {(
+                            ((p.currentValueEUR - p.totalCostEUR) /
+                              p.totalCostEUR) *
+                            100
+                          ).toFixed(2)}{" "}
+                          %
+                        </p>
+                      </div>
+                      {p.currency === "USD" && (
+                        <div>
+                          <p className="text-white">+/- ($)</p>
+                          <p
+                            className={
+                              p.diffValueUSD >= 0
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }
+                          >
+                            {formatNumber(p.diffValueUSD)}
+                          </p>
+                          <p
+                            className={
+                              p.diffValueUSD >= 0
+                                ? "text-green-400 font-semibold text-xs"
+                                : "text-red-400 font-semibold text-xs"
+                            }
+                          >
+                            {(
+                              ((p.currentValueUSD - p.totalCostUSD) /
+                                p.totalCostUSD) *
+                              100
+                            ).toFixed(2)}{" "}
+                            %
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Valeur */}
+                    <div className="col-span-1 flex flex-col gap-1">
+                      <div>
+                        <p className="text-white">Valeur (€)</p>
+                        <p>{formatNumber(p.currentValueEUR)}</p>
+                      </div>
+                      {p.currency === "USD" && (
+                        <div>
+                          <p className="text-white">Valeur ($)</p>
+                          <p>{formatNumber(p.currentValueUSD)}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

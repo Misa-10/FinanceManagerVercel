@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import Papa from "papaparse"; // <- ajouté pour le CSV
+import Papa from "papaparse"; // Pour le CSV
 import { Line, Pie } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -50,16 +50,7 @@ export default function Home() {
           axios.get(`${API_URL}/portfolio/history`),
         ]);
 
-        const accountsData = accountsRes.data || [];
-
-        const accountsWithTotals = accountsData.map((account) => {
-          const totalValue =
-            account.types?.reduce((acc, t) => acc + (t.totalValue || 0), 0) ||
-            0;
-          return { ...account, totalValue };
-        });
-
-        setAccounts(accountsWithTotals);
+        setAccounts(accountsRes.data || []);
         setHistory(historyRes.data || []);
       } catch (err) {
         console.error(err);
@@ -71,17 +62,18 @@ export default function Home() {
     load();
   }, []);
 
-  const totalValue = accounts.reduce((acc, a) => acc + (a.totalValue || 0), 0);
+  // ---------------------------------------
+  // Calculs globaux
+  // ---------------------------------------
+  const totalValue = accounts.reduce(
+    (acc, a) => acc + (a.totalValueEUR || 0),
+    0
+  );
 
   const totalInvested = accounts.reduce(
     (acc, a) =>
       acc +
-      (a.types?.reduce(
-        (tAcc, t) =>
-          tAcc +
-          (t.positions?.reduce((pAcc, p) => pAcc + (p.totalCost || 0), 0) || 0),
-        0
-      ) || 0),
+      (a.types?.reduce((tAcc, t) => tAcc + (t.totalInvestedEUR || 0), 0) || 0),
     0
   );
 
@@ -94,11 +86,14 @@ export default function Home() {
   const totalDiff = totalValue - totalInvested - totalCash;
   const totalPercent = totalInvested ? (totalDiff / totalInvested) * 100 : 0;
 
+  // ---------------------------------------
+  // Chart data
+  // ---------------------------------------
   const globalPieData = {
     labels: accounts.map((a) => a.name),
     datasets: [
       {
-        data: accounts.map((a) => a.totalValue || 0),
+        data: accounts.map((a) => a.totalValueEUR || 0),
         backgroundColor: COLORS,
         borderColor: "#0f172a",
         borderWidth: 2,
@@ -106,37 +101,52 @@ export default function Home() {
     ],
   };
 
+  // fonction numéro de semaine ISO avec padding
+  function getWeekNumber(d) {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const week = Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
+    return week.toString().padStart(2, "0"); // <-- padding sur 2 chiffres
+  }
+
+  // initialisation de l'objet
+  const weeklyHistoryMap = {};
+
+  // boucle sur les données
+  history.forEach((d) => {
+    if (!d.date || !d.total_value) return;
+
+    const date = new Date(d.date);
+    const year = date.getFullYear();
+    const week = getWeekNumber(date);
+    const key = `${year}-W${week}`; // clé avec padding
+
+    // conversion string -> number
+    const totalValue = parseFloat(d.total_value.replace(",", "."));
+
+    // on garde la dernière valeur de la semaine
+    weeklyHistoryMap[key] = {
+      week: key,
+      totalValueEUR: totalValue,
+    };
+  });
+
+  // transformer en tableau trié
+  const weeklyHistory = Object.values(weeklyHistoryMap).sort((a, b) =>
+    a.week.localeCompare(b.week)
+  );
+
   const lineData = {
-    labels: history.map((h) => h.date),
+    labels: weeklyHistory.map((h) => h.week),
     datasets: [
       {
         label: "Valeur globale (€)",
-        data: history.map((h) => h.total_value || 0),
-        fill: false,
+        data: weeklyHistory.map((h) => h.totalValueEUR),
         borderColor: "#5e72e4",
-        tension: 0.2,
-      },
-      {
-        label: "Plus-value positions (€)",
-        data: history.map((h) => {
-          const invested =
-            h.types?.reduce(
-              (iAcc, t) =>
-                iAcc +
-                (t.positions?.reduce(
-                  (pAcc, p) => pAcc + (p.totalCost || 0),
-                  0
-                ) || 0),
-              0
-            ) || 0;
-          const cash =
-            h.types?.reduce((cAcc, t) => cAcc + (t.cash || 0), 0) || 0;
-          const total = h.totalValue || 0;
-          return total - invested - cash;
-        }),
         fill: false,
-        borderColor: "#f59e0b",
-        tension: 0.2,
+        tension: 0.3,
       },
     ],
   };
@@ -144,15 +154,14 @@ export default function Home() {
   const lineOptions = {
     responsive: true,
     plugins: { legend: { display: false } },
-
     scales: {
       x: {
-        offset: true, // ajoute de l’espace avant/après la ligne
+        offset: true,
         ticks: {
-          maxRotation: 0, // évite l’écrasement des labels
+          maxRotation: 0,
           minRotation: 0,
           autoSkip: true,
-          autoSkipPadding: 20, // espace entre labels
+          autoSkipPadding: 20,
         },
       },
     },
@@ -199,72 +208,46 @@ export default function Home() {
   // ---------------------------------------
   // Gestion import CSV portfolio_history
   // ---------------------------------------
-
   function normalizeNumber(input) {
     if (!input) return 0;
     return parseFloat(
-      String(input)
-        .replace(/\s/g, "") // retire espaces normales et insécables
-        .replace("€", "")
-        .replace(",", ".")
+      String(input).replace(/\s/g, "").replace("€", "").replace(",", ".")
     );
   }
 
   function normalizeDate(dateStr) {
     if (!dateStr) return null;
-
-    // Retirer l'heure si présente
     const [dateOnly] = dateStr.trim().split(" ");
-
-    // Si format ISO, on le renvoie tel quel
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
-      return dateOnly;
-    }
-
-    // Si format FR JJ/MM/AAAA
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return dateOnly;
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateOnly)) {
       const [d, m, y] = dateOnly.split("/");
       return `${y}-${m}-${d}`;
     }
-
-    // Dernier recours: tentative parse automatique
     const d = new Date(dateOnly);
-    if (!isNaN(d.getTime())) {
-      return d.toISOString().split("T")[0];
-    }
-
-    return null;
+    return !isNaN(d.getTime()) ? d.toISOString().split("T")[0] : null;
   }
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const API_URL = import.meta.env.VITE_API_URL;
-
     Papa.parse(file, {
       header: false,
       skipEmptyLines: true,
       complete: async (results) => {
         try {
-          const cleanData = results.data.map(([rawDate, rawValue]) => {
-            const date = normalizeDate(rawDate);
-            const value = normalizeNumber(rawValue);
-
-            return { date, total_value: value };
-          });
+          const cleanData = results.data.map(([rawDate, rawValue]) => ({
+            date: normalizeDate(rawDate),
+            total_value: normalizeNumber(rawValue),
+          }));
 
           const csvData = Papa.unparse(cleanData);
 
-          await axios.post(`${API_URL}/portfolio/import`, {
-            csv: csvData,
-          });
+          await axios.post(`${API_URL}/portfolio/import`, { csv: csvData });
 
           alert("Import CSV réussi !");
 
-          const historyRes = await axios.get(
-            `${API_URL}/portfolio/history`
-          );
+          const historyRes = await axios.get(`${API_URL}/portfolio/history`);
           setHistory(historyRes.data || []);
         } catch (err) {
           console.error("Erreur import CSV portfolio_history:", err);
@@ -278,15 +261,65 @@ export default function Home() {
     });
   };
 
+  // Calcul répartition par catégorie
+  const categoryTotals = {
+    Liquidité: 0,
+    Crypto: 0,
+    Bourse: 0,
+  };
+
+  accounts.forEach((account) => {
+    account.types?.forEach((type) => {
+      // Cash -> Liquidité
+      categoryTotals.Liquidité += type?.cash || 0;
+
+      if (type?.name === "Cryptomonnaies") {
+        categoryTotals.Crypto += type.totalValueEUR - (type.cash || 0) || 0;
+      } else {
+        categoryTotals.Bourse += type.totalValueEUR - (type.cash || 0) || 0;
+      }
+    });
+  });
+
+  // calcul % de chaque catégorie
+  const totalCategories =
+    categoryTotals.Liquidité + categoryTotals.Crypto + categoryTotals.Bourse;
+  if (totalCategories > 0) {
+    Object.keys(categoryTotals).forEach((key) => {
+      categoryTotals[key] = Number(
+        ((categoryTotals[key] / totalCategories) * 100).toFixed(2)
+      );
+    });
+  }
+
+  // Données pour le Pie Chart
+  const categoryPieData = {
+    labels: [
+      `Liquidité & Épargne ( ${categoryTotals["Liquidité"]}% )`,
+      `Crypto ( ${categoryTotals["Crypto"]}% )`,
+      `Bourse ( ${categoryTotals["Bourse"]}% )`,
+    ],
+    datasets: [
+      {
+        data: [
+          categoryTotals.Liquidité,
+          categoryTotals.Crypto,
+          categoryTotals.Bourse,
+        ],
+        backgroundColor: ["#F87171", "#60A5FA", "#F59E0B"],
+        borderColor: "#0f172a",
+        borderWidth: 2,
+      },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-(--background-dark) text-(--text-primary-dark) pl-0 md:pl-64">
       {/* Header */}
       <div className="sticky top-0 z-20 backdrop-blur bg-black/20 border-b border-white/10 flex justify-between items-center px-6 py-4">
-        {" "}
         <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
           Tableau de bord
         </h1>
-        {/* Boutons Import */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowImportInfo(true)}
@@ -308,6 +341,7 @@ export default function Home() {
           </label>
         </div>
       </div>
+
       {/* Modal info */}
       {showImportInfo && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
@@ -336,7 +370,8 @@ export default function Home() {
           </div>
         </div>
       )}
-      {/* Reste de ta page : evolution + graphiques + comptes */}
+
+      {/* Contenu principal */}
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* Evolution */}
         <Card>
@@ -389,9 +424,19 @@ export default function Home() {
           ) : totalValue === 0 ? (
             <EmptyState label="Aucune valeur pour le moment" />
           ) : (
-            <div className="h-[250px] flex items-center justify-center">
-              <div className="w-full max-w-[400px]">
-                <Pie data={globalPieData} options={pieOptions} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Pie globale par compte */}
+              <div className="h-[250px] flex items-center justify-center">
+                <div className="w-full max-w-[400px]">
+                  <Pie data={globalPieData} options={pieOptions} />
+                </div>
+              </div>
+
+              {/* Pie par catégorie */}
+              <div className="h-[250px] flex items-center justify-center">
+                <div className="w-full max-w-[500px]">
+                  <Pie data={categoryPieData} options={pieOptions} />
+                </div>
               </div>
             </div>
           )}
@@ -400,22 +445,14 @@ export default function Home() {
         {/* Liste des comptes */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {accounts.map((account) => {
-            const total = account.totalValue || 0;
-
+            const total = account.totalValueEUR || 0;
             const invested =
               account.types?.reduce(
-                (acc, t) =>
-                  acc +
-                  (t.positions?.reduce(
-                    (pAcc, p) => pAcc + (p.totalCost || 0),
-                    0
-                  ) || 0),
+                (acc, t) => acc + (t.totalInvestedEUR || 0),
                 0
               ) || 0;
-
             const cashTotal =
               account.types?.reduce((acc, t) => acc + (t.cash || 0), 0) || 0;
-
             const diff = total - invested - cashTotal;
             const diffPercent = invested ? (diff / invested) * 100 : 0;
             const globalPercent = totalValue ? (total / totalValue) * 100 : 0;
@@ -460,7 +497,6 @@ export default function Home() {
           })}
         </div>
       </div>
-      ;
     </div>
   );
 }
