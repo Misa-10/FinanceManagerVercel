@@ -18,8 +18,6 @@ export default function OrdersPage() {
   const [editingOrderId, setEditingOrderId] = useState(null);
   const [showImportInfo, setShowImportInfo] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL;
-
   useEffect(() => {
     loadAccounts();
     loadOrders();
@@ -27,7 +25,7 @@ export default function OrdersPage() {
 
   const loadAccounts = async () => {
     try {
-      const res = await axios.get(`${API_URL}/accounts`);
+      const res = await axios.get("http://localhost:8000/api/accounts");
       const formatted = res.data.map((acc) => ({
         ...acc,
         types: acc.types || [],
@@ -40,7 +38,7 @@ export default function OrdersPage() {
 
   const loadOrders = async () => {
     try {
-      const res = await axios.get(`${API_URL}/orders`);
+      const res = await axios.get("http://localhost:8000/api/orders");
       setOrders(res.data);
     } catch (err) {
       console.error("Erreur chargement ordres:", err);
@@ -76,9 +74,12 @@ export default function OrdersPage() {
 
     try {
       if (editingOrderId) {
-        await axios.put(`${API_URL}/orders/${editingOrderId}`, payload);
+        await axios.put(
+          `http://localhost:8000/api/orders/${editingOrderId}`,
+          payload
+        );
       } else {
-        await axios.post(`${API_URL}/orders`, payload);
+        await axios.post("http://localhost:8000/api/orders", payload);
       }
       loadOrders();
       resetForm();
@@ -90,7 +91,7 @@ export default function OrdersPage() {
   const handleDeleteOrder = async (orderId) => {
     if (!window.confirm("Voulez-vous vraiment supprimer cet ordre ?")) return;
     try {
-      await axios.delete(`${API_URL}/orders/${orderId}`);
+      await axios.delete(`http://localhost:8000/api/orders/${orderId}`);
       loadOrders();
     } catch (err) {
       console.error("Erreur suppression ordre:", err);
@@ -121,8 +122,8 @@ export default function OrdersPage() {
       complete: async function (results) {
         try {
           const [accountsRes, accountTypesRes] = await Promise.all([
-            axios.get(`${API_URL}/accounts`),
-            axios.get(`${API_URL}/accounts/types`),
+            axios.get("http://localhost:8000/api/accounts"),
+            axios.get("http://localhost:8000/api/accounts/types"),
           ]);
 
           const accounts = accountsRes.data;
@@ -186,7 +187,10 @@ export default function OrdersPage() {
             return;
           }
 
-          await axios.post(`${API_URL}/orders/import`, validOrders);
+          await axios.post(
+            "http://localhost:8000/api/orders/import",
+            validOrders
+          );
           alert("Ordres importés avec succès !");
           loadOrders();
         } catch (err) {

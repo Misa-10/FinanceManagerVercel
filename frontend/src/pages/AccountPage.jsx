@@ -9,13 +9,11 @@ export default function AccountPage({ reloadAccounts }) {
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const API_URL = import.meta.env.VITE_API_URL;
-
   useEffect(() => {
     async function fetchAccount() {
       setLoading(true);
       try {
-        const res = await axios.get(`${API_URL}/accounts/${id}`);
+        const res = await axios.get(`http://localhost:8000/api/accounts/${id}`);
         setAccount(res.data);
       } catch (err) {
         console.error(err);
@@ -30,7 +28,7 @@ export default function AccountPage({ reloadAccounts }) {
   async function handleDelete() {
     if (!window.confirm("Voulez-vous vraiment supprimer ce compte ?")) return;
     try {
-      await axios.delete(`${API_URL}/accounts/${id}`);
+      await axios.delete(`http://localhost:8000/api/accounts/${id}`);
       if (reloadAccounts) reloadAccounts();
       navigate("/");
     } catch (err) {

@@ -9,11 +9,9 @@ import axios from "axios";
 export default function App() {
   const [accounts, setAccounts] = useState([]);
 
-  const API_URL = import.meta.env.VITE_API_URL;
-
   const loadAccounts = async () => {
     try {
-      const res = await axios.get(`${API_URL}/accounts`);
+      const res = await axios.get("http://localhost:8000/api/accounts");
       setAccounts(res.data);
     } catch (err) {
       console.error(err);

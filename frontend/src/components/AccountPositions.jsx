@@ -9,13 +9,11 @@ export default function AccountPositions({ accountId, accountTypes }) {
   const [cashValues, setCashValues] = useState({});
   const [cashSaving, setCashSaving] = useState({});
 
-  const API_URL = import.meta.env.VITE_API_URL;
-
   useEffect(() => {
     async function fetchPositions() {
       setLoading(true);
       try {
-        const res = await axios.get(`${API_URL}/accounts/full`);
+        const res = await axios.get("http://localhost:8000/api/accounts/full");
         const accounts = res.data || [];
         const account = accounts.find((a) => a.id === Number(accountId));
 
@@ -84,7 +82,7 @@ export default function AccountPositions({ accountId, accountTypes }) {
     setCashSaving((s) => ({ ...s, [typeId]: true }));
 
     try {
-      await axios.put(`${API_URL}/accounts/cash`, {
+      await axios.put("http://localhost:8000/api/accounts/cash", {
         account_id: Number(accountId),
         type_id: Number(typeId),
         cash: Number(newCash || 0),
