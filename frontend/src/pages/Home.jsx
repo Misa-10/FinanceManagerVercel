@@ -60,7 +60,7 @@ export default function Home() {
     }
 
     load();
-  }, []);
+  }, [API_URL]);
 
   // ---------------------------------------
   // Calculs globaux
@@ -87,7 +87,7 @@ export default function Home() {
   const totalPercent = totalInvested ? (totalDiff / totalInvested) * 100 : 0;
 
   // ---------------------------------------
-  // Chart data
+  // Chart data: global pie (par compte)
   // ---------------------------------------
   const globalPieData = {
     labels: accounts.map((a) => a.name),
@@ -124,7 +124,7 @@ export default function Home() {
     const key = `${year}-W${week}`; // clé avec padding
 
     // conversion string -> number
-    const totalValue = parseFloat(d.total_value.replace(",", "."));
+    const totalValue = parseFloat(String(d.total_value).replace(",", "."));
 
     // on garde la dernière valeur de la semaine
     weeklyHistoryMap[key] = {
@@ -209,7 +209,7 @@ export default function Home() {
   // Gestion import CSV portfolio_history
   // ---------------------------------------
   function normalizeNumber(input) {
-    if (!input) return 0;
+    if (input === null || input === undefined || input === "") return 0;
     return parseFloat(
       String(input).replace(/\s/g, "").replace("€", "").replace(",", ".")
     );
@@ -261,50 +261,93 @@ export default function Home() {
     });
   };
 
-  // Calcul répartition par catégorie
-  const categoryTotals = {
-    Liquidité: 0,
-    Crypto: 0,
-    Bourse: 0,
+  // ---------------------------------------
+  // Calcul répartition par catégorie (nouvelle structure)
+  // ---------------------------------------
+  const categories = {
+    Liquidité: {
+      total: 0,
+      invested: 0,
+      cash: 0,
+      diff: 0,
+      diffPercent: 0,
+      globalPercent: 0,
+    },
+    Crypto: {
+      total: 0,
+      invested: 0,
+      cash: 0,
+      diff: 0,
+      diffPercent: 0,
+      globalPercent: 0,
+    },
+    Bourse: {
+      total: 0,
+      invested: 0,
+      cash: 0,
+      diff: 0,
+      diffPercent: 0,
+      globalPercent: 0,
+    },
   };
 
   accounts.forEach((account) => {
     account.types?.forEach((type) => {
-      // Cash -> Liquidité
-      categoryTotals.Liquidité += type?.cash || 0;
-
+      // Déterminer la catégorie
+      let category;
       if (type?.name === "Cryptomonnaies") {
-        categoryTotals.Crypto += type.totalValueEUR - (type.cash || 0) || 0;
+        category = "Crypto";
+      } else if ((type?.totalInvestedEUR || 0) === 0 && (type?.cash || 0) > 0) {
+        // cas simple : pas d'investissement, seulement du cash -> liquidité
+        category = "Liquidité";
       } else {
-        categoryTotals.Bourse += type.totalValueEUR - (type.cash || 0) || 0;
+        category = "Bourse";
       }
+
+      const totalValueType = type?.totalValueEUR || 0;
+      const investedType = type?.totalInvestedEUR || 0;
+      const cashType = type?.cash || 0;
+
+      categories[category].total += totalValueType;
+      categories[category].invested += investedType;
+      categories[category].cash += cashType;
     });
   });
 
-  // calcul % de chaque catégorie
-  const totalCategories =
-    categoryTotals.Liquidité + categoryTotals.Crypto + categoryTotals.Bourse;
-  if (totalCategories > 0) {
-    Object.keys(categoryTotals).forEach((key) => {
-      categoryTotals[key] = Number(
-        ((categoryTotals[key] / totalCategories) * 100).toFixed(2)
-      );
-    });
-  }
+  // calculs complémentaires (diff / %)
+  const totalCategoriesValue =
+    categories.Liquidité.total +
+    categories.Crypto.total +
+    categories.Bourse.total;
 
-  // Données pour le Pie Chart
+  Object.keys(categories).forEach((key) => {
+    const c = categories[key];
+    c.diff = c.total - c.invested - c.cash;
+    c.diffPercent = c.invested ? (c.diff / c.invested) * 100 : 0;
+    c.globalPercent = totalCategoriesValue
+      ? (c.total / totalCategoriesValue) * 100
+      : 0;
+    // arrondir pour affichage
+    c.diffPercent = Number(c.diffPercent.toFixed(2));
+    c.globalPercent = Number(c.globalPercent.toFixed(2));
+  });
+
+  // ---------------------------------------
+  // Données pour le Pie Chart (par catégorie)
+  // Utilise les totaux réels, et affiche les % dans les labels
+  // ---------------------------------------
   const categoryPieData = {
     labels: [
-      `Liquidité & Épargne ( ${categoryTotals["Liquidité"]}% )`,
-      `Crypto ( ${categoryTotals["Crypto"]}% )`,
-      `Bourse ( ${categoryTotals["Bourse"]}% )`,
+      `Liquidité & Épargne ( ${categories["Liquidité"].globalPercent}% )`,
+      `Crypto ( ${categories["Crypto"].globalPercent}% )`,
+      `Bourse ( ${categories["Bourse"].globalPercent}% )`,
     ],
     datasets: [
       {
         data: [
-          categoryTotals.Liquidité,
-          categoryTotals.Crypto,
-          categoryTotals.Bourse,
+          categories.Liquidité.total,
+          categories.Crypto.total,
+          categories.Bourse.total,
         ],
         backgroundColor: ["#F87171", "#60A5FA", "#F59E0B"],
         borderColor: "#0f172a",
@@ -440,6 +483,52 @@ export default function Home() {
               </div>
             </div>
           )}
+        </Card>
+
+        {/* Cartes par catégorie */}
+        <Card>
+          <h2 className="text-lg font-semibold mb-4">
+            Répartition par catégorie
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {Object.entries(categories).map(([name, c]) => (
+              <Card key={name}>
+                <div className="flex flex-col gap-2">
+                  <h3 className="font-medium text-lg">{name}</h3>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Valeur totale :</span>
+                    <span className="text-white font-semibold">
+                      {formatNumber(c.total)} €
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Plus-/moins-value :</span>
+                    <span
+                      className={
+                        c.diff >= 0
+                          ? "text-green-400 font-semibold"
+                          : "text-red-400 font-semibold"
+                      }
+                    >
+                      {formatNumber(c.diff)} € ({formatNumber(c.diffPercent)} %)
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Répartition globale :</span>
+                    <span className="text-white font-semibold">
+                      {formatNumber(c.globalPercent)} %
+                    </span>
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-gray-400">Liquidités :</span>
+                    <span className="text-white font-semibold">
+                      {formatNumber(c.cash)} €
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
         </Card>
 
         {/* Liste des comptes */}
